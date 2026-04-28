@@ -1,4 +1,4 @@
-import { pino, type Logger } from "pino";
+import { pino, multistream, type Logger } from "pino";
 import { mkdirSync, createWriteStream } from "node:fs";
 import { join } from "node:path";
 
@@ -15,7 +15,7 @@ export function createLogger(opts: LoggerOptions): Logger {
   if (opts.alsoStdout) {
     return pino(
       { level: "info", base: { service: "symphony" } },
-      pino.multistream([{ stream }, { stream: process.stdout }]),
+      multistream([{ stream }, { stream: process.stdout }]),
     );
   }
   return pino({ level: "info", base: { service: "symphony" } }, stream);

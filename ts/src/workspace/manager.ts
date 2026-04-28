@@ -10,8 +10,8 @@ import {
 export interface WorkspaceManagerOptions {
   root: string;
   hooks?: {
-    after_create?: string;
-    before_remove?: string;
+    after_create?: string | undefined;
+    before_remove?: string | undefined;
   };
   /** Override for tests. Defaults to the real shell-runner. */
   runHook?: HookRunner;
@@ -68,7 +68,10 @@ const defaultRunHook: HookRunner = async (hook, cwd, env) => {
 
 export class WorkspaceManager {
   private readonly root: string;
-  private readonly hooks: { after_create?: string; before_remove?: string };
+  private readonly hooks: {
+    after_create?: string | undefined;
+    before_remove?: string | undefined;
+  };
   private readonly runHook: HookRunner;
   private readonly fs: WorkspaceFs;
 
