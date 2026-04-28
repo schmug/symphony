@@ -53,6 +53,8 @@ describe("StateStore", () => {
         candidatesSeen: 3,
         dispatched: 2,
         reconciled: 0,
+        skippedBackoff: 0,
+        tombstonesCleared: 0,
         errors: [],
       },
     });
@@ -64,6 +66,8 @@ describe("StateStore", () => {
         candidatesSeen: 1,
         dispatched: 0,
         reconciled: 1,
+        skippedBackoff: 0,
+        tombstonesCleared: 0,
         errors: ["api 500"],
       },
     });

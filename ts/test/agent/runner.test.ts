@@ -89,7 +89,11 @@ const config: WorkflowConfig = {
   polling: { interval_ms: 5000 },
   workspace: { root: "/tmp" },
   hooks: {},
-  agent: { max_concurrent_agents: 5, max_turns: 10 },
+  agent: {
+    max_concurrent_agents: 5,
+    max_turns: 10,
+    no_progress_timeout_ms: 0, // disabled by default in these tests
+  },
   codex: {
     command: "codex app-server",
     approval_policy: "never",
@@ -204,6 +208,137 @@ describe("AgentRunner", () => {
     await runner.stop();
     const final = await done;
     expect(final.stage).toBe("stopped");
+  });
+});
+
+describe("AgentRunner watchdog", () => {
+  function makeWatchdog() {
+    let nowMs = 0;
+    let handler: (() => void) | null = null;
+    let periodMs = 0;
+    return {
+      clock: {
+        setInterval(h: () => void, p: number) {
+          handler = h;
+          periodMs = p;
+          return {
+            clear: () => {
+              handler = null;
+            },
+          };
+        },
+        now: () => nowMs,
+      },
+      advance(ms: number) {
+        nowMs += ms;
+      },
+      tickWatchdog() {
+        handler?.();
+      },
+      getPeriodMs: () => periodMs,
+      isActive: () => handler !== null,
+    };
+  }
+
+  async function reachRunningState(transport: MockTransport) {
+    await nextTick();
+    transport.respondLast({}); // initialize ack
+    await nextTick();
+    await nextTick(); // initialized notify, then thread/start
+    transport.respondLast({ thread: { id: "thread-1" } });
+    await nextTick();
+    transport.respondLast({ turn: { id: "turn-1" } });
+    await nextTick();
+  }
+
+  it("kills the run when no Codex events arrive within no_progress_timeout_ms", async () => {
+    const watchdog = makeWatchdog();
+    const transport = new MockTransport();
+    const runner = new AgentRunner({
+      input: { issue, workspacePath: "/tmp/ws", prompt: "do work" },
+      config: {
+        ...config,
+        agent: { ...config.agent, no_progress_timeout_ms: 5_000 },
+      },
+      createTransport: () => transport,
+      createClient: (t) => new CodexClient({ transport: t, responseTimeoutMs: 5000 }),
+      watchdog: watchdog.clock,
+    });
+    const done = runner.start();
+    await reachRunningState(transport);
+    expect(runner.current().stage).toBe("running");
+    expect(watchdog.isActive()).toBe(true);
+
+    // No events for >= 5s — watchdog fires and kills the run.
+    watchdog.advance(5_000);
+    watchdog.tickWatchdog();
+    const final = await done;
+    expect(final.stage).toBe("failed");
+    expect(final.error).toMatch(/No Codex events for 5s/);
+  });
+
+  it("does not fire while events keep arriving", async () => {
+    const watchdog = makeWatchdog();
+    const transport = new MockTransport();
+    const runner = new AgentRunner({
+      input: { issue, workspacePath: "/tmp/ws", prompt: "x" },
+      config: {
+        ...config,
+        agent: { ...config.agent, no_progress_timeout_ms: 5_000 },
+      },
+      createTransport: () => transport,
+      createClient: (t) => new CodexClient({ transport: t, responseTimeoutMs: 5000 }),
+      watchdog: watchdog.clock,
+    });
+    runner.start();
+    await reachRunningState(transport);
+
+    // Advance partway, send an event, advance partway again — total elapsed
+    // is greater than the timeout, but no contiguous-silence window is.
+    watchdog.advance(3_000);
+    transport.emit(JSON.stringify({ method: "thread/heartbeat", params: {} }));
+    await nextTick();
+    watchdog.advance(3_000);
+    watchdog.tickWatchdog();
+    expect(runner.current().stage).toBe("running");
+    await runner.stop();
+  });
+
+  it("does not start a watchdog when no_progress_timeout_ms is 0", async () => {
+    const watchdog = makeWatchdog();
+    const transport = new MockTransport();
+    const runner = new AgentRunner({
+      input: { issue, workspacePath: "/tmp/ws", prompt: "x" },
+      config,
+      createTransport: () => transport,
+      createClient: (t) => new CodexClient({ transport: t, responseTimeoutMs: 5000 }),
+      watchdog: watchdog.clock,
+    });
+    runner.start();
+    await reachRunningState(transport);
+    expect(watchdog.isActive()).toBe(false);
+    await runner.stop();
+  });
+
+  it("clears the watchdog when the turn completes successfully", async () => {
+    const watchdog = makeWatchdog();
+    const transport = new MockTransport();
+    const runner = new AgentRunner({
+      input: { issue, workspacePath: "/tmp/ws", prompt: "x" },
+      config: {
+        ...config,
+        agent: { ...config.agent, no_progress_timeout_ms: 5_000 },
+      },
+      createTransport: () => transport,
+      createClient: (t) => new CodexClient({ transport: t, responseTimeoutMs: 5000 }),
+      watchdog: watchdog.clock,
+    });
+    const done = runner.start();
+    await reachRunningState(transport);
+    expect(watchdog.isActive()).toBe(true);
+    transport.emit(JSON.stringify({ method: "turn/completed", params: {} }));
+    await done;
+    expect(watchdog.isActive()).toBe(false);
   });
 });
 

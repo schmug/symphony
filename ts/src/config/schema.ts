@@ -39,6 +39,15 @@ const HooksSchema = z
 const AgentSchema = z.object({
   max_concurrent_agents: z.number().int().min(1),
   max_turns: z.number().int().min(1),
+  /**
+   * Kill an agent run that produces no Codex events for this many ms.
+   * Defaults to 5 minutes. Set to 0 to disable.
+   */
+  no_progress_timeout_ms: z
+    .number()
+    .int()
+    .min(0)
+    .default(5 * 60 * 1000),
 });
 
 const CodexSchema = z

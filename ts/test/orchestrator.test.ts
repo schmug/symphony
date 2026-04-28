@@ -37,7 +37,7 @@ const baseConfig: WorkflowConfig = {
   polling: { interval_ms: 1000 },
   workspace: { root: "/tmp" },
   hooks: {},
-  agent: { max_concurrent_agents: 2, max_turns: 5 },
+  agent: { max_concurrent_agents: 2, max_turns: 5, no_progress_timeout_ms: 0 },
   codex: {
     command: "codex app-server",
     approval_policy: "never",

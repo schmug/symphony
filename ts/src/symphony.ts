@@ -52,6 +52,8 @@ export async function buildApp(opts: SymphonyOptions): Promise<SymphonyApp> {
           candidates: e.tick.candidatesSeen,
           dispatched: e.tick.dispatched,
           reconciled: e.tick.reconciled,
+          skippedBackoff: e.tick.skippedBackoff,
+          tombstonesCleared: e.tick.tombstonesCleared,
           errors: e.tick.errors,
         },
         "tick",
@@ -76,6 +78,43 @@ export async function buildApp(opts: SymphonyOptions): Promise<SymphonyApp> {
     promptTemplate,
     onAgentEvent: (event) => pubsub.publish({ kind: "agent", event }),
     onTick: (tick) => pubsub.publish({ kind: "tick", tick }),
+    onRetryEvent: (event) => {
+      switch (event.type) {
+        case "failureRecorded":
+          logger.warn(
+            {
+              issueId: event.issueId,
+              attempts: event.attempts,
+              nextEligibleAt: event.nextEligibleAt.toISOString(),
+              error: event.error,
+            },
+            "retry: failure recorded",
+          );
+          break;
+        case "givenUp":
+          logger.error(
+            {
+              issueId: event.issueId,
+              attempts: event.attempts,
+              error: event.error,
+            },
+            "retry: gave up",
+          );
+          break;
+        case "tombstoneCleared":
+          logger.info(
+            { issueId: event.issueId, reason: event.reason },
+            "retry: tombstone cleared",
+          );
+          break;
+        case "giveUpCommentFailed":
+          logger.error(
+            { issueId: event.issueId, error: event.error },
+            "retry: give-up comment failed",
+          );
+          break;
+      }
+    },
   });
 
   const projectLabel =

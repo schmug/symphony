@@ -79,9 +79,24 @@ npm run typecheck   # tsc -p . --noEmit (everything)
 npm run build       # tsc -p tsconfig.build.json (src only)
 ```
 
+## Retry behavior
+
+Failed runs are not re-dispatched immediately. The orchestrator records each failure in an in-memory retry queue with exponential backoff:
+
+| Attempt | Wait until next try (jittered ±20%) |
+|---|---|
+| 1 | 5s |
+| 2 | 30s |
+| 3 | 2m |
+| 4 | 10m |
+| 5 | 1h |
+
+After **5 failed attempts** Symphony posts a give-up comment on the issue (`Symphony stopped retrying after 5 failed attempts. Last error: ...`) and stops trying. To resume, change the issue's state label — Symphony detects the change on the next tick and clears the tombstone.
+
+**No-progress watchdog:** if Codex produces no events for `agent.no_progress_timeout_ms` (default 5 minutes), the run is killed and counts as a failure. Set to `0` to disable. This is the safety net for the "Codex unexpectedly hung waiting for an approval reply we don't send" case.
+
 ## What's not yet implemented
 
-- **Retry queue with exponential backoff.** Failed runs do not retry on a schedule. The orchestrator simply removes them from the active set.
 - **In-band Codex tool approvals and a `gh_cli` dynamic tool extension.** The current code path assumes `approval_policy: never` and relies on the agent's already-installed `gh` binary. Adding a Codex-side `gh_cli` tool would mirror Elixir's `linear_graphql` extension.
 - **Liquid/Jinja prompt features.** `{% if %}` blocks are not supported — the prompt template uses plain `{{ path }}` substitution. The default WORKFLOW.md is written to work without conditionals.
 - **Live-tested GitHub adapter.** Every test mocks the GitHub client. Run a single-issue smoke against a real repo before running unattended (see "First run" below).

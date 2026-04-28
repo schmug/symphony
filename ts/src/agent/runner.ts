@@ -21,7 +21,22 @@ export interface AgentRunnerOptions {
   createClient?: (transport: Transport) => CodexClient;
   /** Subscribe to lifecycle events. */
   onEvent?: (event: AgentEvent) => void;
+  /** Inject the watchdog scheduler in tests. */
+  watchdog?: WatchdogClock;
 }
+
+export interface WatchdogClock {
+  setInterval(handler: () => void, periodMs: number): { clear: () => void };
+  now(): number;
+}
+
+const realWatchdogClock: WatchdogClock = {
+  setInterval(handler, periodMs) {
+    const t = setInterval(handler, periodMs);
+    return { clear: () => clearInterval(t) };
+  },
+  now: () => Date.now(),
+};
 
 export class AgentRunner {
   private snapshot: RunSnapshot;
@@ -30,6 +45,10 @@ export class AgentRunner {
   private done: Promise<RunSnapshot> | null = null;
   private resolveDone: ((snap: RunSnapshot) => void) | null = null;
   private stopRequested = false;
+  private watchdogTimer: { clear: () => void } | null = null;
+  private lastProgressMs = 0;
+  private readonly watchdog: WatchdogClock;
+  private readonly noProgressTimeoutMs: number;
 
   constructor(private readonly opts: AgentRunnerOptions) {
     this.snapshot = {
@@ -47,6 +66,8 @@ export class AgentRunner {
       lastEventSummary: null,
       error: null,
     };
+    this.watchdog = opts.watchdog ?? realWatchdogClock;
+    this.noProgressTimeoutMs = opts.config.agent.no_progress_timeout_ms ?? 0;
   }
 
   current(): RunSnapshot {
@@ -64,6 +85,7 @@ export class AgentRunner {
 
   async stop(): Promise<void> {
     this.stopRequested = true;
+    this.stopWatchdog();
     if (this.client) await this.client.close().catch(() => {});
     this.transport = null;
     this.client = null;
@@ -109,9 +131,37 @@ export class AgentRunner {
       this.snapshot.turnId = turnId;
       this.snapshot.turnNumber = 1;
       this.setStage("running");
+      this.startWatchdog();
     } catch (err) {
       this.fail(err);
     }
+  }
+
+  private startWatchdog(): void {
+    if (this.noProgressTimeoutMs <= 0) return;
+    this.lastProgressMs = this.watchdog.now();
+    // Poll every 1/4 of the timeout, capped between 1s and 60s.
+    const period = Math.min(60_000, Math.max(1_000, Math.floor(this.noProgressTimeoutMs / 4)));
+    this.watchdogTimer = this.watchdog.setInterval(() => {
+      const now = this.watchdog.now();
+      if (now - this.lastProgressMs >= this.noProgressTimeoutMs) {
+        this.stopWatchdog();
+        this.fail(
+          new Error(
+            `No Codex events for ${Math.floor(this.noProgressTimeoutMs / 1000)}s — killing run`,
+          ),
+        );
+      }
+    }, period);
+  }
+
+  private stopWatchdog(): void {
+    this.watchdogTimer?.clear();
+    this.watchdogTimer = null;
+  }
+
+  private markProgress(): void {
+    this.lastProgressMs = this.watchdog.now();
   }
 
   private makeDefaultTransport(): Transport {
@@ -126,6 +176,7 @@ export class AgentRunner {
   private handleCodexEvent(event: CodexEvent): void {
     const now = new Date();
     this.snapshot.lastEventAt = now;
+    this.markProgress();
     if (event.type === "notification") {
       this.snapshot.lastEventSummary = event.method;
       if (event.method === "thread/tokenUsage/updated") {
@@ -141,6 +192,7 @@ export class AgentRunner {
       }
       if (event.method === "turn/completed") {
         this.snapshot.finishedAt = now;
+        this.stopWatchdog();
         this.setStage("completed");
         this.emit({
           type: "completed",
@@ -183,6 +235,7 @@ export class AgentRunner {
     ) {
       return;
     }
+    this.stopWatchdog();
     const message = err instanceof Error ? err.message : String(err);
     this.snapshot.error = message;
     this.snapshot.finishedAt = new Date();
@@ -194,6 +247,8 @@ export class AgentRunner {
       reason: "error",
     });
     this.resolveDone?.(this.snapshot);
+    // Close transport asynchronously — fire-and-forget, errors swallowed.
+    if (this.client) void this.client.close().catch(() => {});
   }
 
   private setStage(stage: RunStage): void {

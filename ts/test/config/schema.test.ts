@@ -78,4 +78,25 @@ describe("WorkflowConfigSchema", () => {
     const parsed = WorkflowConfigSchema.parse(minimal);
     expect(parsed.workspace.root).toBe("~/code/symphony-workspaces");
   });
+
+  it("defaults agent.no_progress_timeout_ms to 5 minutes", () => {
+    const parsed = WorkflowConfigSchema.parse(minimal);
+    expect(parsed.agent.no_progress_timeout_ms).toBe(300_000);
+  });
+
+  it("accepts an explicit no_progress_timeout_ms", () => {
+    const parsed = WorkflowConfigSchema.parse({
+      ...minimal,
+      agent: { ...minimal.agent, no_progress_timeout_ms: 60_000 },
+    });
+    expect(parsed.agent.no_progress_timeout_ms).toBe(60_000);
+  });
+
+  it("rejects negative no_progress_timeout_ms", () => {
+    const result = WorkflowConfigSchema.safeParse({
+      ...minimal,
+      agent: { ...minimal.agent, no_progress_timeout_ms: -1 },
+    });
+    expect(result.success).toBe(false);
+  });
 });

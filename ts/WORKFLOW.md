@@ -26,6 +26,9 @@ hooks:
 agent:
   max_concurrent_agents: 5
   max_turns: 20
+  # Kill an agent run that produces no Codex events for this many ms.
+  # Defaults to 5 minutes. Set to 0 to disable.
+  no_progress_timeout_ms: 300000
 codex:
   command: codex --model gpt-5.3-codex app-server
   approval_policy: never
