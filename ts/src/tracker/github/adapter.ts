@@ -110,7 +110,9 @@ function buildSearchQuery(repo: string, states: readonly string[]): string {
 }
 
 function quoteLabel(label: string): string {
-  if (/[\s,"]/.test(label)) return `"${label.replace(/"/g, '\\"')}"`;
+  // Always quote labels containing characters GitHub search treats specially
+  // (colons used by `prefix:value`, commas used as the OR separator, spaces).
+  if (/[\s,":]/.test(label)) return `"${label.replace(/"/g, '\\"')}"`;
   return label;
 }
 

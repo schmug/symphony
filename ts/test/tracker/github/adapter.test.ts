@@ -94,7 +94,7 @@ describe("GitHubAdapter", () => {
       expect(client.searchQueries).toHaveLength(2);
       expect(client.searchQueries[0]).toContain("repo:schmug/dmarcheck");
       expect(client.searchQueries[0]).toContain(
-        "label:status:todo,status:in-progress",
+        'label:"status:todo","status:in-progress"',
       );
       expect(client.searchQueries[0]).toContain("is:issue");
       expect(client.searchQueries[0]).toContain("is:open");
@@ -149,7 +149,7 @@ describe("GitHubAdapter", () => {
   describe("fetchIssuesByStates", () => {
     it("uses provided states instead of active_states", async () => {
       await adapter.fetchIssuesByStates(["status:done"]);
-      expect(client.searchQueries[0]).toContain("label:status:done");
+      expect(client.searchQueries[0]).toContain('label:"status:done"');
     });
   });
 

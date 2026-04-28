@@ -55,7 +55,7 @@ export class OctokitGitHubClient implements GitHubClient {
     const out: GitHubIssueRaw[] = [];
     const iter = this.rest.paginate.iterator(
       this.rest.search.issuesAndPullRequests,
-      { q: query, per_page: 100, advanced_search: "true" },
+      { q: query, per_page: 100 },
     );
     for await (const page of iter) {
       for (const item of page.data) {

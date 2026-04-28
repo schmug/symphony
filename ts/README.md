@@ -2,7 +2,7 @@
 
 GitHub-first TypeScript reimplementation of [Symphony](../SPEC.md). Polls GitHub Issues across one or more repos, spawns Codex app-server sessions per issue in isolated workspaces, and renders progress in a terminal dashboard.
 
-> **Status:** Foundation through orchestration is complete (Phases 1–7, 10). 117 tests passing. The web dashboard (Phase 8) is deferred to a follow-up.
+> **Status:** Phases 1–8 + 10 complete. 122 tests passing. Terminal TUI and web dashboard both shipped.
 
 ## Setup
 
@@ -26,7 +26,12 @@ Edit [`WORKFLOW.md`](./WORKFLOW.md) — set `repos:` to the repos you want Symph
 ./dist/cli.js path/to/WORKFLOW.md   # custom path
 ./dist/cli.js --no-tui              # JSON logs to stdout, no terminal UI
 ./dist/cli.js --logs-root /tmp/log  # custom log directory
+./dist/cli.js --web-port 4242       # change web dashboard port (default 4200)
+./dist/cli.js --no-web              # disable the web dashboard
 ```
+
+The web dashboard is at `http://127.0.0.1:4200/` by default. It uses Server-Sent Events
+(`/api/v1/stream`) to push state updates and exposes a JSON snapshot at `/api/v1/state`.
 
 ## State model — labels, not Linear states
 
@@ -77,9 +82,19 @@ npm run build       # tsc -p tsconfig.build.json (src only)
 ## What's not yet implemented
 
 - **Retry queue with exponential backoff.** Failed runs do not retry on a schedule. The orchestrator simply removes them from the active set.
-- **Web dashboard at `/` and `/api/v1/*`.** The Elixir reference has a Phoenix LiveView UI; the TS port has the equivalent terminal UI but not the web one yet.
-- **In-band Codex tool approvals and the `gh_cli` dynamic tool extension.** The current code path assumes `approval_policy: never` and relies on the agent's already-installed `gh` binary. Adding a Codex-side `gh_cli` tool would mirror Elixir's `linear_graphql` extension.
+- **In-band Codex tool approvals and a `gh_cli` dynamic tool extension.** The current code path assumes `approval_policy: never` and relies on the agent's already-installed `gh` binary. Adding a Codex-side `gh_cli` tool would mirror Elixir's `linear_graphql` extension.
 - **Liquid/Jinja prompt features.** `{% if %}` blocks are not supported — the prompt template uses plain `{{ path }}` substitution. The default WORKFLOW.md is written to work without conditionals.
+- **Live-tested GitHub adapter.** Every test mocks the GitHub client. Run a single-issue smoke against a real repo before running unattended (see "First run" below).
+
+## First run — real GitHub smoke test
+
+Before letting Symphony run unattended, verify the GitHub adapter against a real repo:
+
+1. Create a label `status:todo` on a single repo.
+2. Open one issue and apply that label.
+3. Edit `WORKFLOW.md` so `repos:` lists only that repo.
+4. `export GITHUB_TOKEN=...`
+5. Run `./dist/cli.js --no-tui` for ~10 seconds and look for `"candidates":1,"dispatched":1` in the log. The agent run will fail because Codex isn't actually present (or Codex will start and immediately have no work) — that's expected. The signal you want is `candidates: 1`. If it's `candidates: 0`, the search query failed.
 
 ## License
 
