@@ -34,6 +34,12 @@ help with the setup:
 > Set up Symphony for my repository based on
 > https://github.com/openai/symphony/blob/main/elixir/README.md
 
+### Option 3. TypeScript port (GitHub-first)
+
+A GitHub-native TypeScript reimplementation lives in [`ts/`](ts/README.md). It polls GitHub Issues
+(labels-based state mapping, multi-repo) instead of Linear and renders the same terminal dashboard
+via Ink. See [ts/README.md](ts/README.md) for setup.
+
 ---
 
 ## License

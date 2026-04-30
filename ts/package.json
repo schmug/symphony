@@ -1,0 +1,38 @@
+{
+  "name": "symphony",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "symphony": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.0",
+    "@octokit/graphql": "^9.0.3",
+    "@octokit/request-error": "^7.1.0",
+    "@octokit/rest": "^22.0.1",
+    "gray-matter": "^4.0.3",
+    "hono": "^4.12.15",
+    "ink": "^7.0.1",
+    "js-yaml": "^4.1.0",
+    "pino": "^10.3.1",
+    "react": "^19.2.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.14",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.5"
+  }
+}
